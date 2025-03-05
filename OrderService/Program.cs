@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using OrderService.Domain.Repositories;
 using OrderService.Infrastructure.Data;
+using OrderService.Infrastructure.MessageBus;
 using OrderService.Infrastructure.Repositories;
 using Serilog;
 using Serilog.Events;
@@ -24,10 +25,27 @@ Log.Logger = new LoggerConfiguration()
         outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{ThreadId}] [{MachineName}] {Message:lj} {Properties:j}{NewLine}{Exception}")
     .CreateLogger();
 
-builder.Host.UseSerilog();
+// Configure services
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext()
+    .Enrich.WithThreadId()
+    .Enrich.WithMachineName()
+    .WriteTo.Console(
+        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{ThreadId}] {Message:lj} {Properties:j}{NewLine}{Exception}")
+    .WriteTo.File(
+        path: "logs/order-service-.log",
+        rollingInterval: RollingInterval.Day,
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{ThreadId}] [{MachineName}] {Message:lj} {Properties:j}{NewLine}{Exception}"));
 
 // Add services to the container.
 builder.Services.AddControllers();
+
+// Configure Kafka
+builder.Services.Configure<KafkaSettings>(
+    builder.Configuration.GetSection("Kafka"));
+builder.Services.AddSingleton<KafkaProducerService>();
 
 // Add DbContext
 builder.Services.AddDbContext<OrderDbContext>(options =>

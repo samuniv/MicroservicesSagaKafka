@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using OrderService.Domain.Entities;
 using OrderService.Domain.Repositories;
+using OrderService.Events.IntegrationEvents;
+using OrderService.Infrastructure.MessageBus;
 using Serilog;
 
 namespace OrderService.Controllers;
@@ -10,11 +12,16 @@ namespace OrderService.Controllers;
 public class OrderController : ControllerBase
 {
     private readonly IOrderRepository _orderRepository;
+    private readonly KafkaProducerService _kafkaProducer;
     private readonly ILogger<OrderController> _logger;
 
-    public OrderController(IOrderRepository orderRepository, ILogger<OrderController> logger)
+    public OrderController(
+        IOrderRepository orderRepository,
+        KafkaProducerService kafkaProducer,
+        ILogger<OrderController> logger)
     {
         _orderRepository = orderRepository;
+        _kafkaProducer = kafkaProducer;
         _logger = logger;
     }
 
@@ -42,6 +49,10 @@ public class OrderController : ControllerBase
             }
 
             var createdOrder = await _orderRepository.CreateAsync(order);
+            
+            // Publish the OrderCreated event
+            var orderCreatedEvent = new OrderCreatedIntegrationEvent(createdOrder);
+            await _kafkaProducer.PublishOrderEventAsync(orderCreatedEvent);
             
             _logger.LogInformation("Order {OrderId} created successfully for customer {CustomerId} with total amount {TotalAmount}", 
                 createdOrder.Id, 
