@@ -28,6 +28,9 @@ builder.Services.AddDbContext<PaymentDbContext>(options =>
 // Register services
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddSingleton<KafkaProducerService>();
+builder.Services.AddHostedService<KafkaConsumerService>();
+builder.Services.AddSingleton<DlqMonitoringService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<DlqMonitoringService>());
 
 // Configure Kafka
 builder.Services.Configure<KafkaSettings>(

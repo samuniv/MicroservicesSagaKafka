@@ -5,11 +5,12 @@ using PaymentService.Infrastructure.Configuration;
 
 namespace PaymentService.Infrastructure.MessageBus;
 
-public class KafkaProducerService
+public class KafkaProducerService : IDisposable
 {
     private readonly IProducer<string, string> _producer;
     private readonly KafkaSettings _settings;
     private readonly ILogger<KafkaProducerService> _logger;
+    private bool _disposed;
 
     public KafkaProducerService(
         IOptions<KafkaSettings> settings,
@@ -22,9 +23,11 @@ public class KafkaProducerService
         {
             BootstrapServers = _settings.BootstrapServers,
             EnableDeliveryReports = true,
-            RetryBackoffMs = _settings.RetrySettings.InitialRetryDelayMs,
-            MessageTimeoutMs = _settings.RetrySettings.MaxRetryDelayMs,
-            MessageSendMaxRetries = _settings.RetrySettings.MaxRetries
+            RetryBackoffMs = _settings.RetryBackoffMs,
+            MessageTimeoutMs = 45000, // 45 seconds
+            RequestTimeoutMs = 30000, // 30 seconds
+            SecurityProtocol = Enum.Parse<SecurityProtocol>(_settings.SecurityProtocol),
+            SaslMechanism = Enum.Parse<SaslMechanism>(_settings.SaslMechanism)
         };
 
         _producer = new ProducerBuilder<string, string>(config).Build();
@@ -32,67 +35,115 @@ public class KafkaProducerService
 
     public async Task PublishPaymentInitiatedEventAsync(PaymentInitiatedEvent @event)
     {
-        await PublishEventAsync(@event, "payment-initiated");
+        await PublishAsync("payment-initiated", Guid.NewGuid().ToString(), @event);
     }
 
     public async Task PublishPaymentCompletedEventAsync(PaymentCompletedEvent @event)
     {
-        await PublishEventAsync(@event, "payment-completed");
+        await PublishAsync("payment-completed", Guid.NewGuid().ToString(), @event);
     }
 
     public async Task PublishPaymentFailedEventAsync(PaymentFailedEvent @event)
     {
-        await PublishEventAsync(@event, "payment-failed");
+        await PublishAsync("payment-failed", Guid.NewGuid().ToString(), @event);
     }
 
     public async Task PublishRefundInitiatedEventAsync(RefundInitiatedEvent @event)
     {
-        await PublishEventAsync(@event, "refund-initiated");
+        await PublishAsync("refund-initiated", Guid.NewGuid().ToString(), @event);
     }
 
-    private async Task PublishEventAsync<TEvent>(TEvent @event, string topic)
+    public async Task PublishAsync<T>(string topic, string key, T message)
     {
         try
         {
-            var message = new Message<string, string>
+            var messageJson = System.Text.Json.JsonSerializer.Serialize(message);
+            var deliveryResult = await _producer.ProduceAsync(topic, new Message<string, string>
             {
-                Key = Guid.NewGuid().ToString(),
-                Value = System.Text.Json.JsonSerializer.Serialize(@event)
-            };
+                Key = key,
+                Value = messageJson,
+                Headers = new Headers
+                {
+                    { "MessageType", System.Text.Encoding.UTF8.GetBytes(typeof(T).Name) }
+                }
+            });
 
-            var deliveryResult = await _producer.ProduceAsync(
-                _settings.PaymentsTopic + "-" + topic, 
-                message);
+            _logger.LogInformation(
+                "Message {MessageType} published to topic {Topic} with key {Key} at offset {Offset}",
+                typeof(T).Name, topic, key, deliveryResult.Offset);
+        }
+        catch (ProduceException<string, string> ex)
+        {
+            _logger.LogError(ex,
+                "Failed to publish message {MessageType} to topic {Topic} with key {Key}",
+                typeof(T).Name, topic, key);
 
-            if (deliveryResult.Status == PersistenceStatus.Persisted)
+            if (_settings.EnableDlq)
             {
-                _logger.LogInformation(
-                    "Successfully published {EventType} to topic {Topic}", 
-                    typeof(TEvent).Name, 
-                    topic);
+                await SendToDlqAsync(topic, key, message, ex);
             }
-            else
+
+            throw;
+        }
+    }
+
+    private async Task SendToDlqAsync<T>(string originalTopic, string key, T message, Exception exception)
+    {
+        try
+        {
+            var messageJson = System.Text.Json.JsonSerializer.Serialize(message);
+            var dlqMessage = new DeadLetterMessage(
+                originalTopic,
+                key,
+                messageJson,
+                exception.Message,
+                1,
+                new Dictionary<string, string>
+                {
+                    { "MessageType", typeof(T).Name },
+                    { "OriginalTimestamp", DateTime.UtcNow.ToString("O") }
+                },
+                exception);
+
+            await _producer.ProduceAsync(_settings.DeadLetterTopic, new Message<string, string>
             {
-                _logger.LogWarning(
-                    "Message delivery for {EventType} to topic {Topic} reported status: {Status}", 
-                    typeof(TEvent).Name, 
-                    topic, 
-                    deliveryResult.Status);
-            }
+                Key = key,
+                Value = dlqMessage.ToJson(),
+                Headers = new Headers
+                {
+                    { "MessageType", System.Text.Encoding.UTF8.GetBytes("DeadLetterMessage") }
+                }
+            });
+
+            _logger.LogWarning(
+                "Message sent to DLQ topic {Topic} with key {Key}",
+                _settings.DeadLetterTopic, key);
         }
         catch (Exception ex)
         {
-            _logger.LogError(
-                ex,
-                "Failed to publish {EventType} to topic {Topic}", 
-                typeof(TEvent).Name, 
-                topic);
-            throw;
+            _logger.LogError(ex,
+                "Failed to send message to DLQ topic {Topic} with key {Key}",
+                _settings.DeadLetterTopic, key);
         }
     }
 
     public void Dispose()
     {
-        _producer?.Dispose();
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+            return;
+
+        if (disposing)
+        {
+            _producer?.Flush(TimeSpan.FromSeconds(5));
+            _producer?.Dispose();
+        }
+
+        _disposed = true;
     }
 } 
