@@ -6,8 +6,26 @@ using InventoryService.Infrastructure.Repositories;
 using InventoryService.Services;
 using InventoryService.Validators;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
+using Serilog.Events;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure Serilog
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+    .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
+    .Enrich.FromLogContext()
+    .Enrich.WithMachineName()
+    .Enrich.WithThreadId()
+    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}")
+    .WriteTo.File("logs/inventory-service-.txt", 
+        rollingInterval: RollingInterval.Day,
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}")
+    .CreateLogger();
+
+builder.Host.UseSerilog();
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -27,18 +45,11 @@ builder.Services.AddDbContext<InventoryDbContext>(options =>
 builder.Services.Configure<KafkaSettings>(
     builder.Configuration.GetSection("Kafka"));
 builder.Services.AddSingleton<KafkaProducerService>();
+builder.Services.AddHostedService<OrderEventsConsumer>();
 
 // Register services
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
 builder.Services.AddScoped<IInventoryService, InventoryManagementService>();
-
-// Configure logging
-builder.Services.AddLogging(logging =>
-{
-    logging.ClearProviders();
-    logging.AddConsole();
-    logging.AddDebug();
-});
 
 var app = builder.Build();
 
@@ -67,11 +78,23 @@ try
 }
 catch (Exception ex)
 {
-    var logger = app.Services.GetRequiredService<ILogger<Program>>();
-    logger.LogError(ex, "An error occurred while initializing the database");
+    Log.Fatal(ex, "An error occurred while initializing the database");
+    throw;
 }
 
-app.Run();
+try
+{
+    Log.Information("Starting Inventory Service");
+    app.Run();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Inventory Service terminated unexpectedly");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
 
 record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {
