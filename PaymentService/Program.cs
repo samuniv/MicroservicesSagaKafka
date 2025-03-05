@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using PaymentService.Domain.Repositories;
+using PaymentService.Infrastructure.Configuration;
 using PaymentService.Infrastructure.Data;
 using PaymentService.Infrastructure.MessageBus;
-using PaymentService.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,7 +15,15 @@ builder.Services.AddSwaggerGen();
 
 // Configure DbContext
 builder.Services.AddDbContext<PaymentDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlOptions =>
+        {
+            sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(30),
+                errorNumbersToAdd: null);
+        }));
 
 // Register services
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
@@ -33,18 +41,28 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     app.UseSwagger();
     app.UseSwaggerUI();
+
+    // Initialize and seed the database in development
+    using (var scope = app.Services.CreateScope())
+    {
+        var services = scope.ServiceProvider;
+        try
+        {
+            var context = services.GetRequiredService<PaymentDbContext>();
+            var seeder = new PaymentDbSeeder(context);
+            seeder.SeedAsync().Wait();
+        }
+        catch (Exception ex)
+        {
+            var logger = services.GetRequiredService<ILogger<Program>>();
+            logger.LogError(ex, "An error occurred while seeding the database.");
+        }
+    }
 }
 
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
-
-// Apply migrations
-using (var scope = app.Services.CreateScope())
-{
-    var context = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
-    context.Database.Migrate();
-}
 
 var summaries = new[]
 {

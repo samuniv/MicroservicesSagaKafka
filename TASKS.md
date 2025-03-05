@@ -45,15 +45,15 @@ Database Setup:
   - Development environment
   - Production environment
   - Test environment
-- [ ] Set up Entity Framework DbContext for each service
+- [x] Set up Entity Framework DbContext for each service
   - Configure entity mappings
   - Set up value object conversions
   - Configure indexes and constraints
-- [ ] Create initial migrations
+- [x] Create initial migrations
   - Order service migration
   - Inventory service migration
   - Payment service migration
-- [ ] Add database initialization and seeding
+- [x] Add database initialization and seeding
   - Development data seeding
   - Test data seeding
 
@@ -281,9 +281,14 @@ GOAL: Implement robust error handling and resilience patterns
 CONTEXT: System needs to handle failures gracefully
 SUBTASKS:
 - [x] Add retry policies for Kafka operations
-- [ ] Implement circuit breakers
+- [x] Implement circuit breakers
+  - Database connection retry policy
+  - Kafka connection retry policy
 - [ ] Add dead letter queues
-- [ ] Implement idempotency handling
+- [x] Implement idempotency handling
+  - Transaction ID tracking
+  - Duplicate prevention
+  - State validation
 
 ACCEPTANCE:
 - Retries work correctly
