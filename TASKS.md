@@ -96,7 +96,7 @@ Event Definitions:
   - InventoryReservationFailedEvent
   - InventoryReleasedEvent
   - StockUpdatedEvent
-- [ ] Payment Events
+- [x] Payment Events
   - PaymentInitiatedEvent
   - PaymentCompletedEvent
   - PaymentFailedEvent
