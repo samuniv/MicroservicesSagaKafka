@@ -31,13 +31,13 @@ Inventory Domain:
   - Methods: GetByProductId, UpdateStock, Reserve, Release
 
 Payment Domain:
-- [ ] Create Payment aggregate root
+- [x] Create Payment aggregate root
   - Properties: Id, OrderId, Amount, Status, TransactionId, ProcessedAt
   - Methods: Process, Refund, UpdateStatus
   - Validation for Amount and TransactionId
-- [ ] Create PaymentStatus enum
+- [x] Create PaymentStatus enum
   - States: Pending, Processing, Completed, Failed, Refunded
-- [ ] Create IPaymentRepository interface
+- [x] Create IPaymentRepository interface
   - Methods: Create, Update, GetByOrderId, GetByTransactionId
 
 Database Setup:
@@ -236,10 +236,24 @@ ACCEPTANCE:
 GOAL: Implement complete Payment Service functionality
 CONTEXT: Payment Service handles payment processing and confirmation
 SUBTASKS:
-1. Create PaymentController with endpoints
-2. Implement payment processing logic
-3. Add event handlers for inventory events
-4. Implement payment rollback
+- [x] Create PaymentController with endpoints
+  - POST /api/payments (Initiate)
+  - GET /api/payments/{id} (Get)
+  - GET /api/payments/order/{orderId} (GetByOrder)
+  - POST /api/payments/{id}/process (Process)
+  - POST /api/payments/{id}/complete (Complete)
+  - POST /api/payments/{id}/fail (Fail)
+  - POST /api/payments/{id}/refund (Refund)
+- [x] Implement payment processing logic
+  - Payment state machine
+  - Transaction handling
+  - Validation
+- [x] Add event handlers for inventory events
+  - PaymentInitiatedEvent
+  - PaymentCompletedEvent
+- [x] Implement payment rollback
+  - Refund functionality
+  - Status tracking
 ACCEPTANCE:
 - Can process payments
 - Handles payment failures
