@@ -2,6 +2,7 @@ using System.Text.Json;
 using Confluent.Kafka;
 using Microsoft.Extensions.Options;
 using InventoryService.Events.IntegrationEvents;
+using InventoryService.Infrastructure.Configuration;
 
 namespace InventoryService.Infrastructure.MessageBus;
 
@@ -10,12 +11,18 @@ public class KafkaProducerService : IDisposable
     private readonly IProducer<string, string> _producer;
     private readonly string _inventoryTopic;
     private readonly ILogger<KafkaProducerService> _logger;
+    private readonly EventPublishRetryPolicy _retryPolicy;
+    private readonly InventorySettings _settings;
 
     public KafkaProducerService(
         IOptions<KafkaSettings> kafkaSettings,
+        IOptions<InventorySettings> inventorySettings,
+        EventPublishRetryPolicy retryPolicy,
         ILogger<KafkaProducerService> logger)
     {
         _logger = logger;
+        _retryPolicy = retryPolicy;
+        _settings = inventorySettings.Value;
         _inventoryTopic = kafkaSettings.Value.InventoryTopic;
 
         var config = new ProducerConfig
@@ -36,32 +43,64 @@ public class KafkaProducerService : IDisposable
 
     public async Task PublishStockReservedEventAsync(StockReservedIntegrationEvent @event)
     {
-        try
+        await PublishEventAsync(@event, @event.OrderId.ToString());
+    }
+
+    public async Task PublishStockLevelWarningEventAsync(StockLevelWarningIntegrationEvent @event)
+    {
+        if (_settings.Events.PublishStockWarnings)
+        {
+            await PublishEventAsync(@event, @event.ProductId);
+        }
+    }
+
+    public async Task PublishStockLevelNormalizedEventAsync(StockLevelNormalizedIntegrationEvent @event)
+    {
+        if (_settings.Events.PublishStockNormalized)
+        {
+            await PublishEventAsync(@event, @event.ProductId);
+        }
+    }
+
+    public async Task PublishStockDepletedEventAsync(StockDepletedIntegrationEvent @event)
+    {
+        if (_settings.Events.PublishStockDepleted)
+        {
+            await PublishEventAsync(@event, @event.ProductId);
+        }
+    }
+
+    public async Task PublishReservationFailedEventAsync(ReservationFailedIntegrationEvent @event)
+    {
+        await PublishEventAsync(@event, @event.OrderId.ToString());
+    }
+
+    private async Task PublishEventAsync<TEvent>(TEvent @event, string messageKey) where TEvent : class
+    {
+        var eventName = typeof(TEvent).Name;
+
+        await _retryPolicy.ExecuteAsync(async () =>
         {
             var message = new Message<string, string>
             {
-                Key = @event.OrderId.ToString(),
+                Key = messageKey,
                 Value = JsonSerializer.Serialize(@event),
                 Headers = new Headers
                 {
-                    { "event-type", System.Text.Encoding.UTF8.GetBytes(nameof(StockReservedIntegrationEvent)) }
+                    { "event-type", System.Text.Encoding.UTF8.GetBytes(eventName) }
                 }
             };
 
             var deliveryResult = await _producer.ProduceAsync(_inventoryTopic, message);
             
             _logger.LogInformation(
-                "Published StockReservedEvent: OrderId: {OrderId}, Status: {Status}, Partition: {Partition}, Offset: {Offset}",
-                @event.OrderId,
+                "Published {EventType}: Key: {Key}, Status: {Status}, Partition: {Partition}, Offset: {Offset}",
+                eventName,
+                messageKey,
                 deliveryResult.Status,
                 deliveryResult.Partition,
                 deliveryResult.Offset);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error publishing StockReservedEvent for OrderId: {OrderId}", @event.OrderId);
-            throw;
-        }
+        }, $"Publish {eventName}");
     }
 
     public void Dispose()
