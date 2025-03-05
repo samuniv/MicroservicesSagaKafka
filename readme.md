@@ -156,3 +156,65 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Apache Kafka documentation
 - Microsoft .NET Core documentation
 - Microservices and Saga pattern resources
+
+# Order Service with Kafka Integration
+
+This service is part of the Microservices Saga Pattern implementation using Kafka for event-driven communication.
+
+## Prerequisites
+
+- Docker and Docker Compose
+- .NET 7.0 SDK
+- SQL Server LocalDB (for development)
+
+## Getting Started
+
+1. Start Kafka and related services:
+```bash
+docker-compose up -d
+```
+
+2. Access Kafka UI:
+- Open http://localhost:8080 in your browser
+- Create a topic named "orders" if it doesn't exist
+
+3. Run the Order Service:
+```bash
+cd OrderService
+dotnet run
+```
+
+4. Test the API:
+- Open http://localhost:5000 in your browser to access Swagger UI
+- Create an order using the POST endpoint
+- Check the logs to see the events being published and consumed
+
+## Event Types
+
+The service publishes the following events:
+
+1. OrderCreatedIntegrationEvent
+   - Published when a new order is created
+   - Contains order details and items
+
+2. OrderStatusChangedIntegrationEvent
+   - Published when an order's status changes
+   - Contains old and new status
+
+3. OrderCancelledIntegrationEvent
+   - Published when an order is cancelled
+   - Contains cancellation reason
+
+## Architecture
+
+- Uses Kafka for event publishing and consumption
+- Implements the producer-consumer pattern
+- Includes a test consumer for development
+- Uses Serilog for structured logging
+- Implements Entity Framework Core for data persistence
+
+## Monitoring
+
+- Kafka UI: http://localhost:8080
+- Service Swagger UI: http://localhost:5000
+- Logs: Check the `logs` directory for detailed application logs

@@ -46,6 +46,7 @@ builder.Services.AddControllers();
 builder.Services.Configure<KafkaSettings>(
     builder.Configuration.GetSection("Kafka"));
 builder.Services.AddSingleton<KafkaProducerService>();
+builder.Services.AddHostedService<KafkaConsumerService>();
 
 // Add DbContext
 builder.Services.AddDbContext<OrderDbContext>(options =>
