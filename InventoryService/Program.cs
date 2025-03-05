@@ -1,6 +1,10 @@
+using FluentValidation;
+using FluentValidation.AspNetCore;
 using InventoryService.Infrastructure.Data;
+using InventoryService.Infrastructure.MessageBus;
 using InventoryService.Infrastructure.Repositories;
 using InventoryService.Services;
+using InventoryService.Validators;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,9 +15,18 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Configure FluentValidation
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddValidatorsFromAssemblyContaining<CreateInventoryItemRequestValidator>();
+
 // Configure DbContext
 builder.Services.AddDbContext<InventoryDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Configure Kafka
+builder.Services.Configure<KafkaSettings>(
+    builder.Configuration.GetSection("Kafka"));
+builder.Services.AddSingleton<KafkaProducerService>();
 
 // Register services
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();

@@ -1,4 +1,6 @@
 using InventoryService.Domain.Models;
+using InventoryService.Events.IntegrationEvents;
+using InventoryService.Infrastructure.MessageBus;
 using InventoryService.Infrastructure.Repositories;
 using Microsoft.Extensions.Logging;
 
@@ -7,11 +9,16 @@ namespace InventoryService.Services;
 public class InventoryManagementService : IInventoryService
 {
     private readonly IInventoryRepository _repository;
+    private readonly KafkaProducerService _kafkaProducer;
     private readonly ILogger<InventoryManagementService> _logger;
 
-    public InventoryManagementService(IInventoryRepository repository, ILogger<InventoryManagementService> logger)
+    public InventoryManagementService(
+        IInventoryRepository repository,
+        KafkaProducerService kafkaProducer,
+        ILogger<InventoryManagementService> logger)
     {
         _repository = repository;
+        _kafkaProducer = kafkaProducer;
         _logger = logger;
     }
 
@@ -62,6 +69,16 @@ public class InventoryManagementService : IInventoryService
         {
             await _repository.UpdateAsync(item);
             await _repository.SaveChangesAsync();
+            
+            // Publish the stock reserved event
+            var @event = new StockReservedIntegrationEvent(
+                Guid.NewGuid(), // This should be the actual OrderId in a real scenario
+                productId,
+                quantity,
+                item.UnitPrice);
+            
+            await _kafkaProducer.PublishStockReservedEventAsync(@event);
+            
             _logger.LogInformation("Reserved {Quantity} units for product {ProductId}", quantity, productId);
         }
         else
