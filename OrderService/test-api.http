@@ -1,0 +1,84 @@
+@baseUrl = http://localhost:5000
+
+### Create a new order
+POST {{baseUrl}}/api/order
+Content-Type: application/json
+
+{
+    "customerId": "cust123",
+    "items": [
+        {
+            "productId": "12345678-1234-1234-1234-123456789012",
+            "quantity": 2,
+            "price": 29.99
+        },
+        {
+            "productId": "87654321-4321-4321-4321-987654321098",
+            "quantity": 1,
+            "price": 49.99
+        }
+    ]
+}
+
+### Get all orders
+GET {{baseUrl}}/api/order
+
+### Get order by ID (replace with actual order ID after creation)
+GET {{baseUrl}}/api/order/00000000-0000-0000-0000-000000000000
+
+### Get orders by customer ID
+GET {{baseUrl}}/api/order/customer/cust123
+
+### Test validation - Empty order (should fail)
+POST {{baseUrl}}/api/order
+Content-Type: application/json
+
+{
+    "customerId": "cust123",
+    "items": []
+}
+
+### Test validation - Invalid quantity (should fail)
+POST {{baseUrl}}/api/order
+Content-Type: application/json
+
+{
+    "customerId": "cust123",
+    "items": [
+        {
+            "productId": "12345678-1234-1234-1234-123456789012",
+            "quantity": 0,
+            "price": 29.99
+        }
+    ]
+}
+
+### Test validation - Invalid price (should fail)
+POST {{baseUrl}}/api/order
+Content-Type: application/json
+
+{
+    "customerId": "cust123",
+    "items": [
+        {
+            "productId": "12345678-1234-1234-1234-123456789012",
+            "quantity": 1,
+            "price": -10.00
+        }
+    ]
+}
+
+### Test validation - Empty customer ID (should fail)
+POST {{baseUrl}}/api/order
+Content-Type: application/json
+
+{
+    "customerId": "",
+    "items": [
+        {
+            "productId": "12345678-1234-1234-1234-123456789012",
+            "quantity": 1,
+            "price": 29.99
+        }
+    ]
+} 

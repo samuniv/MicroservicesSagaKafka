@@ -3,8 +3,28 @@ using Microsoft.OpenApi.Models;
 using OrderService.Domain.Repositories;
 using OrderService.Infrastructure.Data;
 using OrderService.Infrastructure.Repositories;
+using Serilog;
+using Serilog.Events;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure Serilog
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+    .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
+    .Enrich.FromLogContext()
+    .Enrich.WithThreadId()
+    .Enrich.WithMachineName()
+    .WriteTo.Console(
+        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] [{ThreadId}] {Message:lj} {Properties:j}{NewLine}{Exception}")
+    .WriteTo.File(
+        path: "logs/order-service-.log",
+        rollingInterval: RollingInterval.Day,
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{ThreadId}] [{MachineName}] {Message:lj} {Properties:j}{NewLine}{Exception}")
+    .CreateLogger();
+
+builder.Host.UseSerilog();
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -45,27 +65,42 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
 
-// Initialize Database
 try
 {
+    Log.Information("Starting Order Service");
+    
+    // Initialize the database
     using (var scope = app.Services.CreateScope())
     {
         var context = scope.ServiceProvider.GetRequiredService<OrderDbContext>();
-        
-        // Ensure database is created
-        context.Database.EnsureCreated();
-        
-        // Apply any pending migrations
-        if (context.Database.GetPendingMigrations().Any())
+        try
         {
-            context.Database.Migrate();
+            if (context.Database.EnsureCreated())
+            {
+                Log.Information("Database created successfully");
+            }
+            
+            if (context.Database.GetPendingMigrations().Any())
+            {
+                Log.Information("Applying pending migrations");
+                context.Database.Migrate();
+                Log.Information("Migrations applied successfully");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "An error occurred while initializing the database");
+            throw;
         }
     }
+
+    app.Run();
 }
 catch (Exception ex)
 {
-    var logger = app.Services.GetRequiredService<ILogger<Program>>();
-    logger.LogError(ex, "An error occurred while initializing the database.");
+    Log.Fatal(ex, "Application terminated unexpectedly");
 }
-
-app.Run();
+finally
+{
+    Log.CloseAndFlush();
+}
