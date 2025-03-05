@@ -144,4 +144,162 @@ Configuration for event publishing behavior and retry policies.
 - Failed attempts are logged with the retry count and next retry delay
 - Successful retries are logged with the total retry count
 - Auto-reorder triggers are logged with the current quantity and reorder quantity
-- All timestamps in events are in UTC format 
+- All timestamps in events are in UTC format
+
+## Usage Examples
+
+### 1. Stock Level Management
+
+```csharp
+// Configure inventory settings
+var settings = new InventorySettings
+{
+    Thresholds = new StockThresholds
+    {
+        WarningLevel = 10,
+        NormalLevel = 20,
+        EnableAutoReorder = true,
+        ReorderPoint = 15
+    }
+};
+
+// Create a new inventory item
+await inventoryService.CreateInventoryItemAsync(
+    productId: "PROD-001",
+    name: "Example Product",
+    quantity: 25,
+    unitPrice: 19.99m,
+    sku: "EX-001"
+);
+// No events published (quantity > NormalLevel)
+
+// Remove stock
+await inventoryService.RemoveStockAsync("PROD-001", 10);
+// No events published (quantity = 15, WarningLevel < quantity < NormalLevel)
+
+await inventoryService.RemoveStockAsync("PROD-001", 6);
+// Publishes StockLevelWarningIntegrationEvent (quantity = 9 < WarningLevel)
+
+await inventoryService.AddStockAsync("PROD-001", 15);
+// Publishes StockLevelNormalizedIntegrationEvent (quantity = 24 > NormalLevel)
+```
+
+### 2. Stock Reservation Flow
+
+```csharp
+// Attempt to reserve stock
+var success = await inventoryService.ReserveStockAsync("PROD-001", 5);
+if (success)
+{
+    // Publishes StockReservedIntegrationEvent
+    // If remaining quantity <= WarningLevel, also publishes StockLevelWarningIntegrationEvent
+}
+else
+{
+    // Publishes ReservationFailedIntegrationEvent
+}
+
+// Confirm the reservation
+await inventoryService.ConfirmReservationAsync("PROD-001", 5);
+// If quantity = 0, publishes StockDepletedIntegrationEvent
+```
+
+## Sequence Diagrams
+
+### Stock Level Events Flow
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant IS as InventoryService
+    participant KP as KafkaProducer
+    participant K as Kafka
+
+    C->>IS: RemoveStock(productId, quantity)
+    IS->>IS: Check stock levels
+    alt quantity <= WarningLevel
+        IS->>KP: PublishStockLevelWarningEvent
+        KP->>K: Publish with retry policy
+    else quantity >= NormalLevel
+        IS->>KP: PublishStockLevelNormalizedEvent
+        KP->>K: Publish with retry policy
+    else quantity = 0
+        IS->>KP: PublishStockDepletedEvent
+        KP->>K: Publish with retry policy
+    end
+    IS-->>C: Success
+```
+
+### Reservation Flow with Retry
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant IS as InventoryService
+    participant KP as KafkaProducer
+    participant K as Kafka
+
+    C->>IS: ReserveStock(productId, quantity)
+    IS->>IS: Check availability
+    alt Sufficient stock
+        IS->>KP: PublishStockReservedEvent
+        loop Retry Policy
+            KP->>K: Attempt publish
+            alt Success
+                K-->>KP: Ack
+                KP-->>IS: Success
+            else Failure (retry < max)
+                K-->>KP: Nack
+                Note over KP: Wait with backoff
+            end
+        end
+    else Insufficient stock
+        IS->>KP: PublishReservationFailedEvent
+        KP->>K: Publish with retry policy
+    end
+    IS-->>C: Success/Failure
+```
+
+## Common Scenarios and Event Sequences
+
+1. **Normal Stock Management**
+   - Add stock → No events if within normal range
+   - Remove stock → Warning event when crossing threshold
+   - Add stock → Normalized event when returning to normal level
+
+2. **Reservation Lifecycle**
+   - Reserve → StockReservedIntegrationEvent
+   - Confirm → Possible StockDepletedIntegrationEvent
+   - Cancel → Possible StockLevelNormalizedIntegrationEvent
+
+3. **Auto-reorder Flow**
+   - Stock falls below ReorderPoint
+   - System logs reorder trigger
+   - (Future enhancement: Publish reorder event)
+
+4. **Error Handling**
+   - Failed publish → Retry with exponential backoff
+   - Max retries reached → Log error
+   - Successful retry → Log success with attempt count
+
+## Best Practices
+
+1. **Event Handling**
+   - Always handle events idempotently
+   - Use event timestamps for ordering
+   - Validate event data before processing
+
+2. **Configuration**
+   - Set appropriate thresholds based on business needs
+   - Configure retry policies based on network reliability
+   - Enable auto-reorder only if automated purchasing is supported
+
+3. **Monitoring**
+   - Monitor failed event publications
+   - Track stock levels against thresholds
+   - Set up alerts for repeated retry attempts
+
+4. **Performance**
+   - Use appropriate Kafka partitioning (by ProductId)
+   - Configure reasonable retry delays
+   - Monitor event processing latency 
