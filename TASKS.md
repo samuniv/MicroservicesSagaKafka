@@ -41,7 +41,7 @@ Payment Domain:
   - Methods: Create, Update, GetByOrderId, GetByTransactionId
 
 Database Setup:
-- [ ] Configure SQL Server connection strings for each service
+- [x] Configure SQL Server connection strings for each service
   - Development environment
   - Production environment
   - Test environment
@@ -74,7 +74,7 @@ CONTEXT: Services need to communicate via Kafka events with reliable message del
 
 SUBTASKS:
 Base Infrastructure:
-- [ ] Set up Kafka configuration
+- [x] Set up Kafka configuration
   - Configure broker settings
   - Set up topics with proper partitioning
   - Configure consumer groups
@@ -280,10 +280,11 @@ ACCEPTANCE:
 GOAL: Implement robust error handling and resilience patterns
 CONTEXT: System needs to handle failures gracefully
 SUBTASKS:
-1. Add retry policies for Kafka operations
-2. Implement circuit breakers
-3. Add dead letter queues
-4. Implement idempotency handling
+- [x] Add retry policies for Kafka operations
+- [ ] Implement circuit breakers
+- [ ] Add dead letter queues
+- [ ] Implement idempotency handling
+
 ACCEPTANCE:
 - Retries work correctly
 - Circuit breakers prevent cascading failures
