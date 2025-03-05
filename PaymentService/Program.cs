@@ -3,6 +3,7 @@ using PaymentService.Domain.Repositories;
 using PaymentService.Infrastructure.Configuration;
 using PaymentService.Infrastructure.Data;
 using PaymentService.Infrastructure.MessageBus;
+using PaymentService.Infrastructure.Swagger;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,7 +12,28 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    SwaggerConfiguration.ConfigureSwagger(options);
+});
+
+// Add Authentication & Authorization
+builder.Services.AddAuthentication()
+    .AddJwtBearer(options =>
+    {
+        options.Authority = builder.Configuration["Auth:Authority"];
+        options.Audience = builder.Configuration["Auth:Audience"];
+        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    Policies.AddDlqPolicies(options);
+});
+
+// Configure rate limiting
+builder.Services.Configure<RateLimitingSettings>(
+    builder.Configuration.GetSection("RateLimiting"));
 
 // Configure DbContext
 builder.Services.AddDbContext<PaymentDbContext>(options =>
@@ -31,6 +53,7 @@ builder.Services.AddSingleton<KafkaProducerService>();
 builder.Services.AddHostedService<KafkaConsumerService>();
 builder.Services.AddSingleton<DlqMonitoringService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DlqMonitoringService>());
+builder.Services.AddHostedService<DlqCleanupService>();
 
 // Configure Kafka
 builder.Services.Configure<KafkaSettings>(
@@ -41,9 +64,19 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwagger(c =>
+    {
+        c.RouteTemplate = "api-docs/{documentName}/swagger.json";
+    });
+    
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/api-docs/v1/swagger.json", "Payment Service API V1");
+        c.RoutePrefix = "api-docs";
+        c.DocumentTitle = "Payment Service API Documentation";
+        c.EnableDeepLinking();
+        c.DisplayRequestDuration();
+    });
 
     // Initialize and seed the database in development
     using (var scope = app.Services.CreateScope())
@@ -64,6 +97,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
