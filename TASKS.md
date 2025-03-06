@@ -7,16 +7,16 @@ CONTEXT: Each service needs its own domain models and database context with prop
 
 SUBTASKS:
 Order Domain:
-- [ ] Create OrderItem value object
+- [x] Create OrderItem value object
   - Properties: ProductId, Quantity, Price, Subtotal
   - Validation logic for quantities and prices
-- [ ] Create Order aggregate root
+- [x] Create Order aggregate root
   - Properties: Id, CustomerId, Status, TotalAmount, Items, CreatedAt, UpdatedAt
   - Methods: AddItem, RemoveItem, UpdateStatus, CalculateTotal
   - Invariants: TotalAmount must match items, Status transitions must be valid
-- [ ] Create OrderStatus enum
+- [x] Create OrderStatus enum
   - States: Created, InventoryReserved, PaymentProcessing, Completed, Failed, Cancelled
-- [ ] Create IOrderRepository interface
+- [x] Create IOrderRepository interface
   - Methods: Create, Update, Get, GetAll, Delete
 
 Inventory Domain:
@@ -284,7 +284,7 @@ SUBTASKS:
 - [x] Implement circuit breakers
   - Database connection retry policy
   - Kafka connection retry policy
-- [ ] Add dead letter queues
+- [x] Add dead letter queues
 - [x] Implement idempotency handling
   - Transaction ID tracking
   - Duplicate prevention
@@ -305,9 +305,16 @@ SUBTASKS:
   - Payment operations logging
   - Error and warning logging
   - Transaction tracking
-- [ ] Implement health checks
-- [ ] Add metrics collection
-- [ ] Create monitoring dashboards
+- [x] Implement health checks
+- [x] Add metrics collection
+  - Prometheus metrics
+  - Operation counters
+  - Performance metrics
+  - Business metrics
+- [x] Create monitoring dashboards
+  - Grafana dashboard
+  - Key metrics visualization
+  - Alert thresholds
 
 ACCEPTANCE:
 - All operations are logged

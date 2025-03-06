@@ -1,0 +1,126 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Inventory Operations",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "rate(inventory_operations_total[5m])",
+          "legendFormat": "{{operation}} - {{status}}"
+        }
+      ]
+    },
+    {
+      "title": "Stock Levels",
+      "type": "gauge",
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "inventory_stock_level",
+          "legendFormat": "{{product_name}}"
+        }
+      ]
+    },
+    {
+      "title": "Message Processing Rate",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(messages_processed_total[5m])",
+          "legendFormat": "{{topic}} - {{status}}"
+        }
+      ]
+    },
+    {
+      "title": "Operation Duration",
+      "type": "heatmap",
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(inventory_operation_duration_seconds_bucket[5m])",
+          "legendFormat": "{{operation}}"
+        }
+      ]
+    },
+    {
+      "title": "Reserved Stock",
+      "type": "table",
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "inventory_reserved_stock",
+          "legendFormat": "{{product_name}}"
+        }
+      ],
+      "columns": [
+        { "text": "Product", "value": "product_name" },
+        { "text": "Reserved Stock", "value": "Value" }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 27,
+  "style": "dark",
+  "tags": ["inventory", "monitoring"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Inventory Service Dashboard",
+  "version": 0
+} 
