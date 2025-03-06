@@ -13,6 +13,7 @@ using InventoryService.Infrastructure.Middleware;
 using InventoryService.Infrastructure.Health;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using InventoryService.Infrastructure.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -99,6 +100,13 @@ builder.Services.Configure<KafkaSettings>(
     builder.Configuration.GetSection("Kafka"));
 builder.Services.AddSingleton<KafkaProducerService>();
 builder.Services.AddHostedService<OrderEventsConsumer>();
+
+// Configure Security Services
+builder.Services.Configure<SecuritySettings>(
+    builder.Configuration.GetSection("Security"));
+builder.Services.AddSingleton<DataEncryption>();
+builder.Services.AddScoped<AuditLogger>();
+builder.Services.AddHttpContextAccessor();
 
 // Register services
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
