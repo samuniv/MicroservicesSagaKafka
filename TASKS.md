@@ -170,7 +170,7 @@ Business Logic:
   - Order creation validation
   - Status transition validation
   - Business rules validation
-- [ ] Add AutoMapper configurations
+- [x] Add AutoMapper configurations
   - Entity to DTO mapping
   - DTO to Entity mapping
   - Custom value resolvers
@@ -197,11 +197,11 @@ Infrastructure:
   - EF Core implementation
   - Caching layer
   - Optimistic concurrency
-- [ ] Add background services
+- [x] Add background services
   - Order cleanup
   - Status update jobs
   - Notification sending
-- [ ] Configure API behaviors
+- [x] Configure API behaviors
   - Response caching
   - Rate limiting
   - Request validation

@@ -1,8 +1,10 @@
+using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using OrderService.Domain.Entities;
 using OrderService.Domain.Repositories;
 using OrderService.Events.IntegrationEvents;
 using OrderService.Infrastructure.MessageBus;
+using OrderService.Infrastructure.RateLimiting;
 using OrderService.Models.DTOs;
 
 namespace OrderService.Controllers;
@@ -13,15 +15,18 @@ public class OrderController : ControllerBase
 {
     private readonly IOrderRepository _orderRepository;
     private readonly KafkaProducerService _kafkaProducer;
+    private readonly IMapper _mapper;
     private readonly ILogger<OrderController> _logger;
 
     public OrderController(
         IOrderRepository orderRepository,
         KafkaProducerService kafkaProducer,
+        IMapper mapper,
         ILogger<OrderController> logger)
     {
         _orderRepository = orderRepository;
         _kafkaProducer = kafkaProducer;
+        _mapper = mapper;
         _logger = logger;
     }
 
@@ -32,10 +37,13 @@ public class OrderController : ControllerBase
     /// <returns>The created order</returns>
     /// <response code="201">Order created successfully</response>
     /// <response code="400">Invalid request</response>
+    /// <response code="429">Too many requests</response>
     /// <response code="500">Internal server error</response>
     [HttpPost]
+    [RateLimiting("Create")]
     [ProducesResponseType(typeof(OrderResponseDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<OrderResponseDto>> CreateOrder([FromBody] CreateOrderDto createOrderDto)
     {
@@ -70,7 +78,7 @@ public class OrderController : ControllerBase
                 createdOrder.CustomerId, 
                 createdOrder.TotalAmount);
 
-            var responseDto = MapToOrderResponseDto(createdOrder);
+            var responseDto = _mapper.Map<OrderResponseDto>(createdOrder);
             return CreatedAtAction(nameof(GetOrder), new { id = createdOrder.Id }, responseDto);
         }
         catch (Exception ex)
@@ -87,10 +95,14 @@ public class OrderController : ControllerBase
     /// <returns>The requested order</returns>
     /// <response code="200">Order found</response>
     /// <response code="404">Order not found</response>
+    /// <response code="429">Too many requests</response>
     /// <response code="500">Internal server error</response>
     [HttpGet("{id}")]
+    [RateLimiting("Get")]
+    [ResponseCache(Duration = 60, VaryByQueryKeys = new[] { "id" })]
     [ProducesResponseType(typeof(OrderResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<OrderResponseDto>> GetOrder(Guid id)
     {
@@ -109,7 +121,7 @@ public class OrderController : ControllerBase
                 order.Id, 
                 order.CustomerId);
 
-            var responseDto = MapToOrderResponseDto(order);
+            var responseDto = _mapper.Map<OrderResponseDto>(order);
             return Ok(responseDto);
         }
         catch (Exception ex)
@@ -124,9 +136,13 @@ public class OrderController : ControllerBase
     /// </summary>
     /// <returns>List of all orders</returns>
     /// <response code="200">Orders retrieved successfully</response>
+    /// <response code="429">Too many requests</response>
     /// <response code="500">Internal server error</response>
     [HttpGet]
+    [RateLimiting("List")]
+    [ResponseCache(Duration = 30)]
     [ProducesResponseType(typeof(IEnumerable<OrderResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<IEnumerable<OrderResponseDto>>> GetAllOrders()
     {
@@ -134,7 +150,7 @@ public class OrderController : ControllerBase
         {
             _logger.LogInformation("Retrieving all orders");
             var orders = await _orderRepository.GetAllAsync();
-            var responseDtos = orders.Select(MapToOrderResponseDto);
+            var responseDtos = _mapper.Map<IEnumerable<OrderResponseDto>>(orders);
             _logger.LogInformation("Retrieved {OrderCount} orders", orders.Count());
             return Ok(responseDtos);
         }
@@ -153,11 +169,14 @@ public class OrderController : ControllerBase
     /// <response code="200">Order cancelled successfully</response>
     /// <response code="400">Invalid state transition</response>
     /// <response code="404">Order not found</response>
+    /// <response code="429">Too many requests</response>
     /// <response code="500">Internal server error</response>
     [HttpPut("{id}/cancel")]
+    [RateLimiting("Cancel")]
     [ProducesResponseType(typeof(OrderResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<OrderResponseDto>> CancelOrder(Guid id)
     {
@@ -187,7 +206,7 @@ public class OrderController : ControllerBase
             await _kafkaProducer.PublishOrderEventAsync(orderCancelledEvent);
 
             _logger.LogInformation("Order {OrderId} cancelled successfully", id);
-            var responseDto = MapToOrderResponseDto(order);
+            var responseDto = _mapper.Map<OrderResponseDto>(order);
             return Ok(responseDto);
         }
         catch (Exception ex)
@@ -204,10 +223,14 @@ public class OrderController : ControllerBase
     /// <returns>The order status</returns>
     /// <response code="200">Status retrieved successfully</response>
     /// <response code="404">Order not found</response>
+    /// <response code="429">Too many requests</response>
     /// <response code="500">Internal server error</response>
     [HttpGet("{id}/status")]
+    [RateLimiting("Get")]
+    [ResponseCache(Duration = 30, VaryByQueryKeys = new[] { "id" })]
     [ProducesResponseType(typeof(OrderStatusDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<OrderStatusDto>> GetOrderStatus(Guid id)
     {
@@ -220,7 +243,7 @@ public class OrderController : ControllerBase
                 return NotFound();
             }
 
-            var statusDto = new OrderStatusDto(order.Id, order.Status, order.UpdatedAt);
+            var statusDto = _mapper.Map<OrderStatusDto>(order);
             return Ok(statusDto);
         }
         catch (Exception ex)
@@ -228,23 +251,5 @@ public class OrderController : ControllerBase
             _logger.LogError(ex, "Error retrieving status for order {OrderId}", id);
             return StatusCode(500, "An error occurred while retrieving the order status");
         }
-    }
-
-    private static OrderResponseDto MapToOrderResponseDto(Order order)
-    {
-        return new OrderResponseDto(
-            order.Id,
-            order.CustomerId,
-            order.Status,
-            order.TotalAmount,
-            order.Items.Select(item => new OrderItemDto(
-                item.ProductId,
-                item.Quantity,
-                item.Price,
-                item.Subtotal
-            )).ToList(),
-            order.CreatedAt,
-            order.UpdatedAt
-        );
     }
 } 

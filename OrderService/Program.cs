@@ -1,8 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using OrderService.Domain.Repositories;
+using OrderService.Infrastructure.BackgroundServices;
 using OrderService.Infrastructure.Data;
+using OrderService.Infrastructure.Mapping;
 using OrderService.Infrastructure.MessageBus;
+using OrderService.Infrastructure.RateLimiting;
 using OrderService.Infrastructure.Repositories;
 using Serilog;
 using Serilog.Events;
@@ -42,6 +45,20 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
 // Add services to the container.
 builder.Services.AddControllers();
 
+// Configure AutoMapper
+builder.Services.AddAutoMapper(typeof(OrderMappingProfile));
+
+// Configure Response Caching
+builder.Services.AddResponseCaching(options =>
+{
+    options.MaximumBodySize = 32 * 1024; // 32KB
+    options.UseCaseSensitivePaths = false;
+});
+
+// Configure Rate Limiting
+builder.Services.Configure<RateLimitingSettings>(
+    builder.Configuration.GetSection("RateLimiting"));
+
 // Configure Kafka
 builder.Services.Configure<KafkaSettings>(
     builder.Configuration.GetSection("Kafka"));
@@ -50,10 +67,22 @@ builder.Services.AddHostedService<KafkaConsumerService>();
 
 // Add DbContext
 builder.Services.AddDbContext<OrderDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlOptions =>
+        {
+            sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(30),
+                errorNumbersToAdd: null);
+        }));
 
 // Add Repositories
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
+
+// Register background services
+builder.Services.AddHostedService<OrderCleanupService>();
+builder.Services.AddHostedService<OrderNotificationService>();
 
 // Add OpenAPI/Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -78,9 +107,27 @@ if (app.Environment.IsDevelopment())
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "Order Service API V1");
         c.RoutePrefix = string.Empty; // Serve the Swagger UI at the app's root
     });
+
+    // Initialize and seed the database in development
+    using (var scope = app.Services.CreateScope())
+    {
+        var services = scope.ServiceProvider;
+        try
+        {
+            var context = services.GetRequiredService<OrderDbContext>();
+            var seeder = new PaymentDbSeeder(context);
+            await seeder.SeedAsync();
+        }
+        catch (Exception ex)
+        {
+            var logger = services.GetRequiredService<ILogger<Program>>();
+            logger.LogError(ex, "An error occurred while seeding the database.");
+        }
+    }
 }
 
 app.UseHttpsRedirection();
+app.UseResponseCaching();
 app.UseAuthorization();
 app.MapControllers();
 
