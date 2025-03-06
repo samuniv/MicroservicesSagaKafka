@@ -147,12 +147,12 @@ CONTEXT: Order Service initiates the saga and manages order state throughout the
 
 SUBTASKS:
 API Layer:
-- [ ] Create DTOs
+- [x] Create DTOs
   - CreateOrderDto
   - OrderResponseDto
   - OrderItemDto
   - OrderStatusDto
-- [ ] Implement OrderController
+- [x] Implement OrderController
   - POST /api/orders (Create)
   - GET /api/orders/{id} (Get)
   - GET /api/orders (List)
@@ -160,13 +160,13 @@ API Layer:
   - GET /api/orders/{id}/status (Status)
 
 Business Logic:
-- [ ] Create Order Service
+- [x] Create Order Service
   - CreateOrder method
   - UpdateOrderStatus method
   - CancelOrder method
   - GetOrder method
   - ListOrders method
-- [ ] Implement validation
+- [x] Implement validation
   - Order creation validation
   - Status transition validation
   - Business rules validation
@@ -176,24 +176,24 @@ Business Logic:
   - Custom value resolvers
 
 Saga Orchestration:
-- [ ] Create OrderCreationSaga
+- [x] Create OrderCreationSaga
   - Initiate saga
   - Handle inventory response
   - Handle payment response
   - Complete order
   - Handle failures
-- [ ] Implement event handlers
+- [x] Implement event handlers
   - InventoryReservedHandler
   - InventoryReservationFailedHandler
   - PaymentCompletedHandler
   - PaymentFailedHandler
-- [ ] Add compensation logic
+- [x] Add compensation logic
   - Release inventory
   - Refund payment
   - Update order status
 
 Infrastructure:
-- [ ] Implement OrderRepository
+- [x] Implement OrderRepository
   - EF Core implementation
   - Caching layer
   - Optimistic concurrency
