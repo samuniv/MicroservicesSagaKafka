@@ -65,6 +65,9 @@ builder.Services.Configure<KafkaSettings>(
 builder.Services.AddSingleton<KafkaProducerService>();
 builder.Services.AddHostedService<KafkaConsumerService>();
 
+// Add Saga Orchestrator
+builder.Services.AddScoped<OrderCreationSaga>();
+
 // Add DbContext
 builder.Services.AddDbContext<OrderDbContext>(options =>
     options.UseSqlServer(

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OrderService.Events.IntegrationEvents;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace OrderService.Infrastructure.MessageBus;
 
@@ -17,10 +18,12 @@ public class KafkaConsumerService : BackgroundService
     private readonly Dictionary<string, int> _messageRetryCount;
     private readonly TimeSpan _commitPeriod;
     private DateTime _lastCommitTime;
+    private readonly IServiceScopeFactory _serviceScopeFactory;
 
     public KafkaConsumerService(
         IOptions<KafkaSettings> kafkaSettings,
-        ILogger<KafkaConsumerService> logger)
+        ILogger<KafkaConsumerService> logger,
+        IServiceScopeFactory serviceScopeFactory)
     {
         _logger = logger;
         _ordersTopic = kafkaSettings.Value.OrdersTopic;
@@ -29,6 +32,7 @@ public class KafkaConsumerService : BackgroundService
         _messageRetryCount = new Dictionary<string, int>();
         _commitPeriod = TimeSpan.FromSeconds(5);
         _lastCommitTime = DateTime.UtcNow;
+        _serviceScopeFactory = serviceScopeFactory;
 
         var config = new ConsumerConfig
         {
@@ -250,6 +254,46 @@ public class KafkaConsumerService : BackgroundService
         {
             switch (eventType)
             {
+                case nameof(InventoryReservedEvent):
+                    var inventoryReservedEvent = JsonSerializer.Deserialize<InventoryReservedEvent>(message.Value);
+                    if (inventoryReservedEvent != null)
+                    {
+                        using var scope = _serviceScopeFactory.CreateScope();
+                        var sagaOrchestrator = scope.ServiceProvider.GetRequiredService<OrderCreationSaga>();
+                        await sagaOrchestrator.HandleInventoryReservedEvent(inventoryReservedEvent);
+                    }
+                    break;
+
+                case nameof(InventoryReservationFailedEvent):
+                    var reservationFailedEvent = JsonSerializer.Deserialize<InventoryReservationFailedEvent>(message.Value);
+                    if (reservationFailedEvent != null)
+                    {
+                        using var scope = _serviceScopeFactory.CreateScope();
+                        var sagaOrchestrator = scope.ServiceProvider.GetRequiredService<OrderCreationSaga>();
+                        await sagaOrchestrator.HandleInventoryReservationFailedEvent(reservationFailedEvent);
+                    }
+                    break;
+
+                case nameof(PaymentCompletedEvent):
+                    var paymentCompletedEvent = JsonSerializer.Deserialize<PaymentCompletedEvent>(message.Value);
+                    if (paymentCompletedEvent != null)
+                    {
+                        using var scope = _serviceScopeFactory.CreateScope();
+                        var sagaOrchestrator = scope.ServiceProvider.GetRequiredService<OrderCreationSaga>();
+                        await sagaOrchestrator.HandlePaymentCompletedEvent(paymentCompletedEvent);
+                    }
+                    break;
+
+                case nameof(PaymentFailedEvent):
+                    var paymentFailedEvent = JsonSerializer.Deserialize<PaymentFailedEvent>(message.Value);
+                    if (paymentFailedEvent != null)
+                    {
+                        using var scope = _serviceScopeFactory.CreateScope();
+                        var sagaOrchestrator = scope.ServiceProvider.GetRequiredService<OrderCreationSaga>();
+                        await sagaOrchestrator.HandlePaymentFailedEvent(paymentFailedEvent);
+                    }
+                    break;
+
                 case nameof(OrderCreatedIntegrationEvent):
                     var orderCreatedEvent = JsonSerializer.Deserialize<OrderCreatedIntegrationEvent>(message.Value);
                     _logger.LogInformation("Processing OrderCreatedEvent: OrderId: {OrderId}, CustomerId: {CustomerId}, TotalAmount: {TotalAmount}",
@@ -274,15 +318,14 @@ public class KafkaConsumerService : BackgroundService
                     break;
 
                 default:
-                    _logger.LogWarning("Unknown event type: {EventType}", eventType);
+                    _logger.LogWarning("Unknown event type received: {EventType}", eventType);
                     break;
             }
-
-            await Task.CompletedTask;
         }
-        catch (JsonException ex)
+        catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deserializing message of type {EventType}", eventType);
+            _logger.LogError(ex, "Error processing message of type {EventType}", eventType);
+            // Consider dead letter queue implementation here
             throw;
         }
     }
