@@ -20,14 +20,14 @@ Order Domain:
   - Methods: Create, Update, Get, GetAll, Delete
 
 Inventory Domain:
-- [ ] Create Product entity
+- [x] Create Product entity
   - Properties: Id, Name, SKU, Price, CreatedAt
   - Validation for SKU and Price
-- [ ] Create InventoryItem aggregate root
+- [x] Create InventoryItem aggregate root
   - Properties: Id, ProductId, Quantity, Reserved, LastUpdated
   - Methods: Reserve, Release, Restock
   - Invariants: Reserved cannot exceed Quantity
-- [ ] Create IInventoryRepository interface
+- [x] Create IInventoryRepository interface
   - Methods: GetByProductId, UpdateStock, Reserve, Release
 
 Payment Domain:
@@ -79,19 +79,19 @@ Base Infrastructure:
   - Set up topics with proper partitioning
   - Configure consumer groups
   - Set retention policies
-- [ ] Create base message types
+- [x] Create base message types
   - BaseEvent with common properties
   - Command message base class
   - Event message base class
   - Correlation ID handling
 
 Event Definitions:
-- [ ] Order Events
+- [x] Order Events
   - OrderCreatedEvent
   - OrderUpdatedEvent
   - OrderCancelledEvent
   - OrderCompletedEvent
-- [ ] Inventory Events
+- [x] Inventory Events
   - InventoryReservedEvent
   - InventoryReservationFailedEvent
   - InventoryReleasedEvent
@@ -126,7 +126,7 @@ Configuration:
   - Topic configurations
   - Consumer group settings
   - Security settings
-- [ ] Create health checks
+- [x] Create health checks
   - Broker connectivity
   - Topic availability
   - Consumer group status

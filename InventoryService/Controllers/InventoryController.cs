@@ -3,6 +3,15 @@ using Microsoft.AspNetCore.Mvc;
 using InventoryService.Services;
 using InventoryService.Domain.Models;
 using System.Net;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using InventoryService.Domain.Entities;
+using InventoryService.Domain.Repositories;
+using InventoryService.Events.IntegrationEvents;
+using Microsoft.AspNetCore.Http;
+using Confluent.Kafka;
 
 namespace InventoryService.Controllers;
 
@@ -16,16 +25,19 @@ public class InventoryController : ControllerBase
 {
     private readonly IInventoryService _inventoryService;
     private readonly ILogger<InventoryController> _logger;
+    private readonly IProducer<string, string> _producer;
 
     /// <summary>
     /// Initializes a new instance of the InventoryController
     /// </summary>
     /// <param name="inventoryService">The inventory service</param>
     /// <param name="logger">The logger instance</param>
-    public InventoryController(IInventoryService inventoryService, ILogger<InventoryController> logger)
+    /// <param name="producer">The Kafka producer</param>
+    public InventoryController(IInventoryService inventoryService, ILogger<InventoryController> logger, IProducer<string, string> producer)
     {
         _inventoryService = inventoryService;
         _logger = logger;
+        _producer = producer;
     }
 
     /// <summary>
@@ -279,6 +291,25 @@ public class InventoryController : ControllerBase
         catch (KeyNotFoundException)
         {
             return NotFound();
+        }
+    }
+
+    private async Task PublishEventAsync<T>(string topic, T @event) where T : BaseIntegrationEvent
+    {
+        try
+        {
+            var message = new Message<string, string>
+            {
+                Key = @event.CorrelationId,
+                Value = System.Text.Json.JsonSerializer.Serialize(@event)
+            };
+
+            await _producer.ProduceAsync(topic, message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error publishing event {EventType}", @event.EventType);
+            throw;
         }
     }
 }
